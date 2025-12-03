@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+motor
+openai-whisper
+ffmpeg-python
+pydub
+python-dotenv
+requests
+webrtcvad
+numpy
+scipy
+torch

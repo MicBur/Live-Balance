@@ -1,0 +1,365 @@
+"use client";
+
+import { useEffect, useState } from 'react';
+import GlassCard from '@/components/GlassCard';
+import Link from 'next/link';
+import { FaMicrophone, FaStop, FaDownload, FaMagic } from 'react-icons/fa';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
+export default function Home() {
+    const [stats, setStats] = useState<any>(null);
+    const [processingUploads, setProcessingUploads] = useState<any[]>([]);
+    const [clips, setClips] = useState<any[]>([]);
+    const [selectedClip, setSelectedClip] = useState<any>(null);
+    const [suggestion, setSuggestion] = useState<any>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+    const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+
+    useEffect(() => {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+        // Fetch stats from backend
+        const fetchStats = () => {
+            fetch(`${API_URL}/stats`)
+                .then(res => res.json())
+                .then(setStats)
+                .catch(err => console.error("Failed to fetch stats:", err));
+        };
+
+        // Poll for processing uploads
+        const pollStatus = () => {
+            fetch(`${API_URL}/uploads/status`)
+                .then(res => res.json())
+                .then(setProcessingUploads)
+                .catch(err => console.error("Failed to fetch status:", err));
+        };
+
+        // Poll for clips from all processing uploads
+        const pollClips = () => {
+            fetch(`${API_URL}/segments/all`)
+                .then(res => res.json())
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        setClips(data);
+                    }
+                })
+                .catch(err => console.error("Failed to fetch clips:", err));
+        };
+
+        fetchStats();
+        pollStatus();
+        pollClips();
+
+        const statusInterval = setInterval(pollStatus, 2000);
+        const clipsInterval = setInterval(pollClips, 3000);
+        const statsInterval = setInterval(fetchStats, 5000);
+
+        return () => {
+            clearInterval(statusInterval);
+            clearInterval(clipsInterval);
+            clearInterval(statsInterval);
+        };
+    }, []);
+
+    const fetchSuggestion = async () => {
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/suggestions/new-minute`);
+            const data = await res.json();
+            setSuggestion(data);
+        } catch (err) {
+            console.error("Failed to fetch suggestion", err);
+        }
+    };
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const recorder = new MediaRecorder(stream);
+            const chunks: Blob[] = [];
+
+            recorder.ondataavailable = (e) => chunks.push(e.data);
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'audio/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `neue_minute_${new Date().toISOString()}.webm`;
+                a.click();
+                setAudioChunks([]);
+            };
+
+            recorder.start();
+            setMediaRecorder(recorder);
+            setIsRecording(true);
+        } catch (err) {
+            console.error("Microphone access denied", err);
+            alert("Mikrofon-Zugriff verweigert!");
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            setIsRecording(false);
+        }
+    };
+
+    return <div className="min-h-screen p-8 relative z-10">
+        <header className="flex justify-between items-center mb-12">
+            <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">
+                Hey Mark!
+            </h1>
+            <Link href="/upload">
+                <button className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md transition-all border border-white/10">
+                    <FaMicrophone /> New Recording
+                </button>
+            </Link>
+        </header>
+
+        {/* Processing Status Section */}
+        {
+            processingUploads.length > 0 && (
+                <div className="mb-8 grid grid-cols-1 gap-4">
+                    {processingUploads.map((upload: any) => (
+                        <GlassCard key={upload.upload_id} className="border-cyan-500/30">
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="font-bold text-lg">{upload.filename}</h3>
+                                <span className="text-xs text-cyan-300 animate-pulse">{upload.stage || 'Processing...'}</span>
+                            </div>
+                            <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
+                                <div
+                                    className="bg-cyan-400 h-full transition-all duration-500"
+                                    style={{ width: `${upload.progress || 0}%` }}
+                                ></div>
+                            </div>
+                        </GlassCard>
+                    ))}
+                </div>
+            )
+        }
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+            <GlassCard className="lg:col-span-2">
+                <h2 className="text-2xl font-bold mb-4">Themen-Verteilung</h2>
+                {stats?.topics ? (
+                    <div className="h-64 w-full flex items-center">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={stats.topics}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    fill="#8884d8"
+                                    paddingAngle={5}
+                                    dataKey="count"
+                                >
+                                    {stats.topics.map((entry: any, index: number) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#1a1a2e', border: 'none', borderRadius: '8px' }}
+                                    itemStyle={{ color: '#fff' }}
+                                />
+                                <Legend />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="ml-8">
+                            <p className="text-white/70 mb-2">Gesamt: <span className="font-bold text-white">{stats.total_clips}</span> Clips</p>
+                            <p className="text-white/50 text-sm">Top Thema: {stats.topics[0]?.name}</p>
+                        </div>
+                    </div>
+                ) : (
+                    <p className="text-white/50">Lade Statistiken...</p>
+                )}
+            </GlassCard>
+
+            {/* Suggestion & Recording Card */}
+            <GlassCard>
+                <h2 className="text-2xl font-bold mb-4">KI-Mark's Vorschläge</h2>
+                {!suggestion ? (
+                    <div className="text-center py-8">
+                        <p className="text-white/50 mb-4">Brauchst du Inspiration?</p>
+                        <button
+                            onClick={fetchSuggestion}
+                            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full font-bold hover:scale-105 transition-transform flex items-center gap-2 mx-auto"
+                        >
+                            <FaMagic /> 4 Vorschläge generieren
+                        </button>
+                    </div>
+                ) : (
+                        <div className="space-y-4 animate-fadeIn relative">
+                            <button
+                                onClick={() => setSuggestion(null)}
+                                className="absolute -top-2 -right-2 p-2 text-white/30 hover:text-white transition-colors z-10"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+
+                                {Array.isArray(suggestion) ? suggestion.map((s: any, i: number) => (
+                                    <div key={i} className="p-4 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <h3 className="font-bold text-cyan-300">{s.suggested_topic}</h3>
+                                            <span className="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 whitespace-nowrap ml-2">
+                                                {s.category || 'Vorschlag'}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-white/50 mb-2">{s.reason}</p>
+                                        <details className="group">
+                                            <summary className="text-xs text-cyan-400 cursor-pointer list-none flex items-center gap-1">
+                                                <span className="group-open:rotate-90 transition-transform">▶</span> Skript anzeigen
+                                            </summary>
+                                            <div className="mt-2 p-3 bg-black/20 rounded-lg">
+                                                <p className="text-sm font-mono text-white/80 italic">"{s.script}"</p>
+                                            </div>
+                                        </details>
+                                    </div>
+                                )) : (
+                                    <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                                        <h3 className="font-bold text-cyan-300">{suggestion.suggested_topic}</h3>
+                                        <p className="text-xs text-white/50 mt-1">{suggestion.reason}</p>
+                                        <div className="mt-2 p-3 bg-black/20 rounded-lg">
+                                            <p className="text-sm font-mono text-white/80 italic">"{suggestion.script}"</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex justify-center pt-4 border-t border-white/10">
+                                {!isRecording ? (
+                                    <button
+                                        onClick={startRecording}
+                                        className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg shadow-red-500/30"
+                                    >
+                                        <FaMicrophone className="text-2xl text-white" />
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={stopRecording}
+                                        className="w-16 h-16 rounded-full bg-white flex items-center justify-center hover:bg-gray-200 transition-colors animate-pulse"
+                                    >
+                                        <FaStop className="text-2xl text-red-500" />
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-center text-xs text-white/30">
+                                {isRecording ? "Aufnahme läuft..." : "Klicken zum Aufnehmen & Downloaden"}
+                            </p>
+                        </div>
+                    )}
+    </GlassCard>
+            </div >
+
+        {/* Clips Grid */ }
+        < div className = "mt-12" >
+            <h2 className="text-2xl font-bold mb-6">Clips ({clips.length})</h2>
+    {
+        clips.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {clips.map((clip, index) => (
+                    <div key={index} onClick={() => setSelectedClip(clip)} className="cursor-pointer transition-transform hover:scale-105">
+                        <GlassCard>
+                            <div className="flex justify-between items-start mb-2">
+                                <div className="flex flex-col">
+                                    <h3 className="font-bold text-lg text-white leading-tight">{clip.topic || 'Unbekannt'}</h3>
+                                    {clip.category && (
+                                        <span className="text-[10px] text-cyan-300 uppercase tracking-wider mt-1">{clip.category}</span>
+                                    )}
+                                </div>
+                                <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ml-2 ${clip.importance === 'wichtig' ? 'bg-red-500/20 text-red-300' :
+                                    clip.importance === 'mittel' ? 'bg-yellow-500/20 text-yellow-300' :
+                                        'bg-white/10 text-white/50'
+                                    }`}>
+                                    {clip.importance || 'unwichtig'}
+                                </span>
+                            </div>
+
+                            <p className="text-sm text-white/70 mb-4 line-clamp-3">{clip.one_sentence_summary || 'Keine Zusammenfassung'}</p>
+
+                            {clip.mark_nörgel && (
+                                <div className="mt-auto p-3 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
+                                    <p className="text-xs text-cyan-300 italic">Mark: "{clip.mark_nörgel}"</p>
+                                </div>
+                            )}
+                        </GlassCard>
+                    </div>
+                ))}
+            </div>
+        ) : (
+            <p className="text-white/50 text-center">Warte auf Clips...</p>
+        )
+    }
+            </div >
+
+        {/* Detail Modal */ }
+    {
+        selectedClip && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedClip(null)}>
+                <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <h2 className="text-2xl font-bold text-white mb-2">{selectedClip.topic || 'Unbekannt'}</h2>
+                            <div className="flex gap-2 items-center">
+                                {selectedClip.category && (
+                                    <span className="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                        {selectedClip.category}
+                                    </span>
+                                )}
+                                <span className={`text-xs px-2 py-1 rounded-full ${selectedClip.importance === 'wichtig' ? 'bg-red-500/20 text-red-300' :
+                                    selectedClip.importance === 'mittel' ? 'bg-yellow-500/20 text-yellow-300' :
+                                        'bg-white/10 text-white/50'
+                                    }`}>
+                                    {selectedClip.importance || 'unwichtig'}
+                                </span>
+                                <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-white/50">
+                                    {Math.round(selectedClip.duration || 0)}s
+                                </span>
+                            </div>
+                        </div>
+                        <button onClick={() => setSelectedClip(null)} className="text-white/50 hover:text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div className="mb-6">
+                        <audio controls className="w-full h-10" autoPlay>
+                            <source src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/clips/${selectedClip.file_name}`} type="audio/mpeg" />
+                            Your browser does not support the audio element.
+                        </audio>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                            <h4 className="text-sm font-bold text-white/50 mb-2 uppercase tracking-wider">Zusammenfassung</h4>
+                            <p className="text-white/90">{selectedClip.one_sentence_summary}</p>
+                        </div>
+
+                        {selectedClip.mark_nörgel && (
+                            <div className="p-4 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
+                                <h4 className="text-sm font-bold text-cyan-400/50 mb-2 uppercase tracking-wider">KI-Mark sagt</h4>
+                                <p className="text-cyan-300 italic text-lg">"{selectedClip.mark_nörgel}"</p>
+                            </div>
+                        )}
+
+                        <div className="p-4 bg-black/20 rounded-xl border border-white/5">
+                            <h4 className="text-sm font-bold text-white/50 mb-2 uppercase tracking-wider">Transkript</h4>
+                            <p className="text-white font-mono text-sm leading-relaxed whitespace-pre-wrap">{selectedClip.text}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+        </div >
+    );
+}
