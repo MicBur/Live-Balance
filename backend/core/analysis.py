@@ -9,7 +9,7 @@ load_dotenv()
 GROK_API_KEY = os.getenv("GROK_API_KEY")
 GROK_API_URL = "https://api.x.ai/v1/chat/completions" # Verify this URL
 
-def call_grok(messages: List[Dict], model="grok-4-1-fast-reasoning", timeout=90) -> str:
+def call_grok(messages: List[Dict], model="grok-beta", timeout=90) -> str:
     headers = {
         "Authorization": f"Bearer {GROK_API_KEY}",
         "Content-Type": "application/json"
