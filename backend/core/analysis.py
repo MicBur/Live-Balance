@@ -1,48 +1,60 @@
 import os
 import json
-import requests
 from typing import List, Dict
 from dotenv import load_dotenv
+from xai_sdk import Client
+import logging
 
 load_dotenv()
 
-GROK_API_KEY = os.getenv("GROK_API_KEY")
-GROK_API_URL = "https://api.x.ai/v1/chat/completions" # Verify this URL
+XAI_API_KEY = os.getenv("GROK_API_KEY")  # Keep same env var name
+logger = logging.getLogger("uvicorn")
 
-def call_grok(messages: List[Dict], model="grok-beta", timeout=90) -> str:
-    headers = {
-        "Authorization": f"Bearer {GROK_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "messages": messages,
-        "model": model,
-        "stream": False,
-        "temperature": 0.7
-    }
+def call_grok(messages: List[Dict], model="grok-4-1-fast-reasoning-latest", timeout=90) -> str:
+    """
+    Call Grok API using official xAI SDK
+    """
     try:
-        # Increase timeout to 45 seconds for slower Grok responses
-        import logging
-        logger = logging.getLogger("uvicorn")
-        logger.info(f"Calling Grok API with {len(messages)} messages, timeout={timeout}s")
+        logger.info(f"Calling Grok API with {len(messages)} messages, model={model}, timeout={timeout}s")
         
-        response = requests.post(GROK_API_URL, json=payload, headers=headers, timeout=timeout)
-        response.raise_for_status()
+        # Initialize xAI client
+        client = Client(api_key=XAI_API_KEY, timeout=timeout)
         
-        content = response.json()['choices'][0]['message']['content']
-        logger.info(f"Grok API success: received {len(content)} characters")
-        return content
-    except requests.exceptions.Timeout:
-        print(f"Grok API Timeout after 45 seconds")
-        import logging
-        logger = logging.getLogger("uvicorn")
-        logger.error("Grok API Timeout - API took longer than 45 seconds to respond")
+        # Create chat with model
+        chat = client.chat.create(model=model, max_tokens=2000, temperature=0.7)
+        
+        # Add messages to chat
+        from xai_sdk.chat import system, user, assistant
+        
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            
+            if not content:
+                continue
+                
+            if role == "system":
+                chat.append(system(content))
+            elif role == "user":
+                chat.append(user(content))
+            elif role == "assistant":
+                chat.append(assistant(content))
+        
+        # Get response (this is synchronous)
+        response = chat.sample()
+        
+        # Extract content from response
+        if response and hasattr(response, 'message'):
+            if hasattr(response.message, 'content') and response.message.content:
+                result = response.message.content.strip()
+                tokens_used = response.usage.total_tokens if hasattr(response, 'usage') and response.usage else 'unknown'
+                logger.info(f"Grok API success. Tokens used: {tokens_used}")
+                return result
+        
+        logger.error(f"Grok API returned empty response: {response}")
         return ""
     except Exception as e:
-        print(f"Grok API Error: {e}")
-        import logging
-        logger = logging.getLogger("uvicorn")
-        logger.error(f"Grok API Error: {e}")
+        logger.error(f"Grok API Error: {str(e)}", exc_info=True)
         return ""
 
 def analyze_topic_style(text: str) -> Dict:
