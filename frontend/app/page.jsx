@@ -766,30 +766,24 @@ export default function Home() {
                                                         </div>
 
                                                         {/* Action Buttons */}
-                                                        <div className="mt-3 flex justify-center gap-3 flex-wrap">{editingSuggestion?.id === s.id && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    // Update the suggestion in the array
-                                                                    setSuggestion(prev => prev.map(item =>
-                                                                        item.id === s.id ? { ...item, text: editingSuggestion.text } : item
-                                                                    ));
-                                                                    setEditingSuggestion(null);
+                                                        <div className="mt-3 flex justify-center gap-3 flex-wrap">
+                                                            <NanoBananaButton
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (editingSuggestion?.id === s.id) {
+                                                                        // Save edited suggestion
+                                                                        setSuggestion(prev => prev.map(sug =>
+                                                                            sug.id === s.id ? { ...sug, text: editingSuggestion.text } : sug
+                                                                        ));
+                                                                        setEditingSuggestion(null);
+                                                                    } else {
+                                                                        setEditingSuggestion({ id: s.id, text: s.text });
+                                                                    }
                                                                 }}
-                                                                className="px-6 py-2 rounded-full bg-green-500/20 hover:bg-green-500/30 text-green-300 transition-all flex items-center gap-2 border border-green-500/30"
+                                                                variant={editingSuggestion?.id === s.id ? "success" : "secondary"}
                                                             >
-                                                                <FaCheck />
-                                                                Speichern
-                                                            </button>
-                                                        )}
-                                                            {!editingSuggestion && (
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); setEditingSuggestion({ id: s.id, text: s.text }); }}
-                                                                    className="px-6 py-2 rounded-full bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 transition-all flex items-center gap-2 border border-purple-500/30"
-                                                                >
-                                                                    <FaEdit />
-                                                                    Bearbeiten
-                                                                </button>
-                                                            )}
+                                                                {editingSuggestion?.id === s.id ? <><FaCheck /> Speichern</> : <><FaEdit /> Bearbeiten</>}
+                                                            </NanoBananaButton>
                                                             {/* Play Button */}
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); playTTS(s.id, s.text); }}
@@ -853,7 +847,24 @@ export default function Home() {
                                                                 Übernehmen
                                                             </button>
 
-                                                            {/* Download Button */}
+                                                            {/* Download Text Button */}
+                                                            <NanoBananaButton
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const element = document.createElement('a');
+                                                                    const file = new Blob([s.text], { type: 'text/plain' });
+                                                                    element.href = URL.createObjectURL(file);
+                                                                    element.download = `mark-tipp-${s.topic.replace(/\s+/g, '-')}.txt`;
+                                                                    document.body.appendChild(element);
+                                                                    element.click();
+                                                                    document.body.removeChild(element);
+                                                                }}
+                                                                variant="secondary"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg> Download
+                                                            </NanoBananaButton>
+
+                                                            {/* Download Audio Button */}
                                                             <button
                                                                 onClick={async (e) => {
                                                                     e.stopPropagation();
@@ -939,162 +950,156 @@ export default function Home() {
                     <h2 className="text-2xl font-bold mb-6">Clips ({clips.length})</h2>
                     {clips.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {clips.map((clip, index) => {
-                                const categoryColor = getCategoryColor(clip.topic);
-                                const isAI = clip.source === 'KI-Mark';
-
-                                return (
-                                    <div
-                                        key={index}
-                                        onClick={() => setSelectedClip(clip)}
-                                        className={`cursor-pointer transition-all duration-500 hover:scale-105 ${selectedTopic && clip.topic !== selectedTopic ? 'opacity-30 grayscale' : 'opacity-100'}`}
-                                    >
-                                        {isAI ? (
-                                            <div className="ai-border">
-                                                <div className="ai-border-content p-6 card-3d">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <div className="flex flex-col flex-grow mr-2">
-                                                            {editingClipId === clip.file_name ? (
-                                                                <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={editTopicValue}
-                                                                        onChange={(e) => setEditTopicValue(e.target.value)}
-                                                                        className="bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm w-full focus:outline-none focus:border-cyan-400"
-                                                                        autoFocus
-                                                                    />
-                                                                    <button onClick={(e) => saveTopic(e, clip.file_name)} className="text-green-400 hover:text-green-300 p-1">
-                                                                        <FaCheck />
-                                                                    </button>
-                                                                    <button onClick={cancelEditing} className="text-red-400 hover:text-red-300 p-1">
-                                                                        <FaTimes />
-                                                                    </button>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="flex items-center gap-2 group">
-                                                                    <h3 className="font-bold text-lg text-white leading-tight">
-                                                                        {clip.source === 'KI-Mark' && <span className="text-cyan-400 mr-1">*</span>}
-                                                                        {clip.topic || 'Unbekannt'}
-                                                                    </h3>
-                                                                    <button
-                                                                        onClick={(e) => startEditing(e, clip)}
-                                                                        className="opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-white p-1"
-                                                                        title="Thema bearbeiten"
-                                                                    >
-                                                                        <FaEdit />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={(e) => deleteClip(e, clip)}
-                                                                        className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400/50 hover:text-red-400 p-1"
-                                                                        title="Clip löschen"
-                                                                    >
-                                                                        <FaTrash />
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                            {clip.category && (
-                                                                <span className="text-[10px] text-cyan-300 uppercase tracking-wider mt-1">{clip.category}</span>
-                                                            )}
-                                                        </div>
-                                                        <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ml-2 ${clip.importance === 'wichtig' ? 'bg-red-500/20 text-red-300' :
-                                                            clip.importance === 'mittel' ? 'bg-yellow-500/20 text-yellow-300' :
-                                                                'bg-white/10 text-white/50'
-                                                            }`}>
-                                                            {clip.importance || 'unwichtig'}
-                                                        </span>
+                            {clips.map((clip, index) => (
+                                <div
+                                    key={index}
+                                    onClick={() => setSelectedClip(clip)}
+                                    className={`cursor-pointer transition-all duration-500 hover:scale-105 ${selectedTopic && clip.topic !== selectedTopic ? 'opacity-30 grayscale' : 'opacity-100'}`}
+                                >
+                                    <GlassCard>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="flex flex-col flex-grow mr-2">
+                                                {editingClipId === clip.file_name ? (
+                                                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                                        <input
+                                                            type="text"
+                                                            value={editTopicValue}
+                                                            onChange={(e) => setEditTopicValue(e.target.value)}
+                                                            className="bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm w-full focus:outline-none focus:border-cyan-400"
+                                                            autoFocus
+                                                        />
+                                                        <button onClick={(e) => saveTopic(e, clip.file_name)} className="text-green-400 hover:text-green-300 p-1">
+                                                            <FaCheck />
+                                                        </button>
+                                                        <button onClick={cancelEditing} className="text-red-400 hover:text-red-300 p-1">
+                                                            <FaTimes />
+                                                        </button>
                                                     </div>
-
-                                                    <p className="text-sm text-white/70 mb-4 line-clamp-3">{clip.one_sentence_summary || 'Keine Zusammenfassung'}</p>
-
-                                                    {clip.mark_nörgel && (
-                                                        <div className="mt-auto p-3 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
-                                                            <p className="text-xs text-cyan-300 italic">Mark: "{clip.mark_nörgel}"</p>
-                                                        </div>
-                                                    )}
-                                                </GlassCard>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                            <p className="text-white/50 text-center">Warte auf Clips...</p>
-                    )}
-                        </div>
-
-                {/* Detail Modal */}
-                    {
-                        selectedClip && (
-                            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedClip(null)}>
-                                <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-                                    <div className="flex justify-between items-start mb-6">
-                                        <div>
-                                            <h2 className="text-2xl font-bold text-white mb-2">
-                                                {selectedClip.source === 'KI-Mark' && <span className="text-cyan-400 mr-1">*</span>}
-                                                {selectedClip.topic || 'Unbekannt'}
-                                            </h2>
-                                            <div className="flex gap-2 items-center">
-                                                {selectedClip.category && (
-                                                    <span className="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                                                        {selectedClip.category}
-                                                    </span>
+                                                ) : (
+                                                    <div className="flex items-center gap-2 group">
+                                                        <h3 className="font-bold text-lg text-white leading-tight">
+                                                            {clip.source === 'KI-Mark' && <span className="text-cyan-400 mr-1">*</span>}
+                                                            {clip.topic || 'Unbekannt'}
+                                                        </h3>
+                                                        <button
+                                                            onClick={(e) => startEditing(e, clip)}
+                                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-white p-1"
+                                                            title="Thema bearbeiten"
+                                                        >
+                                                            <FaEdit />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => deleteClip(e, clip)}
+                                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400/50 hover:text-red-400 p-1"
+                                                            title="Clip löschen"
+                                                        >
+                                                            <FaTrash />
+                                                        </button>
+                                                    </div>
                                                 )}
-                                                <span className={`text-xs px-2 py-1 rounded-full ${selectedClip.importance === 'wichtig' ? 'bg-red-500/20 text-red-300' :
-                                                    selectedClip.importance === 'mittel' ? 'bg-yellow-500/20 text-yellow-300' :
-                                                        'bg-white/10 text-white/50'
-                                                    }`}>
-                                                    {selectedClip.importance || 'unwichtig'}
-                                                </span>
-                                                <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-white/50">
-                                                    {Math.round(selectedClip.duration || 0)}s
-                                                </span>
+                                                {clip.category && (
+                                                    <span className="text-[10px] text-cyan-300 uppercase tracking-wider mt-1">{clip.category}</span>
+                                                )}
                                             </div>
-                                        </div>
-                                        <button onClick={() => setSelectedClip(null)} className="text-white/50 hover:text-white">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        </button>
-                                    </div>
-
-                                    <div className="mb-6">
-                                        <audio controls className="w-full h-10" autoPlay>
-                                            <source src={`/api/clips/${selectedClip.file_name}`} type="audio/mpeg" />
-                                            Your browser does not support the audio element.
-                                        </audio>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-                                            <h4 className="text-sm font-bold text-white/50 mb-2 uppercase tracking-wider">Zusammenfassung</h4>
-                                            <p className="text-white/90">{selectedClip.one_sentence_summary}</p>
+                                            <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ml-2 ${clip.importance === 'wichtig' ? 'bg-red-500/20 text-red-300' :
+                                                clip.importance === 'mittel' ? 'bg-yellow-500/20 text-yellow-300' :
+                                                    'bg-white/10 text-white/50'
+                                                }`}>
+                                                {clip.importance || 'unwichtig'}
+                                            </span>
                                         </div>
 
-                                        {selectedClip.mark_nörgel && (
-                                            <div className="p-4 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
-                                                <h4 className="text-sm font-bold text-cyan-400/50 mb-2 uppercase tracking-wider">KI-Mark sagt</h4>
-                                                <p className="text-cyan-300 italic text-lg">"{selectedClip.mark_nörgel}"</p>
+                                        <p className="text-sm text-white/70 mb-4 line-clamp-3">{clip.one_sentence_summary || 'Keine Zusammenfassung'}</p>
+
+                                        {clip.mark_nörgel && (
+                                            <div className="mt-auto p-3 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
+                                                <p className="text-xs text-cyan-300 italic">Mark: "{clip.mark_nörgel}"</p>
                                             </div>
                                         )}
+                                    </GlassCard>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-white/50 text-center">Warte auf Clips...</p>
+                    )}
+                </div>
 
-                                        <div className="p-4 bg-black/20 rounded-xl border border-white/5">
-                                            <h4 className="text-sm font-bold text-white/50 mb-2 uppercase tracking-wider">Transkript</h4>
-                                            <p className="text-white font-mono text-sm leading-relaxed whitespace-pre-wrap">{selectedClip.text}</p>
+                {/* Detail Modal */}
+                {
+                    selectedClip && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedClip(null)}>
+                            <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-white mb-2">
+                                            {selectedClip.source === 'KI-Mark' && <span className="text-cyan-400 mr-1">*</span>}
+                                            {selectedClip.topic || 'Unbekannt'}
+                                        </h2>
+                                        <div className="flex gap-2 items-center">
+                                            {selectedClip.category && (
+                                                <span className="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                                    {selectedClip.category}
+                                                </span>
+                                            )}
+                                            <span className={`text-xs px-2 py-1 rounded-full ${selectedClip.importance === 'wichtig' ? 'bg-red-500/20 text-red-300' :
+                                                selectedClip.importance === 'mittel' ? 'bg-yellow-500/20 text-yellow-300' :
+                                                    'bg-white/10 text-white/50'
+                                                }`}>
+                                                {selectedClip.importance || 'unwichtig'}
+                                            </span>
+                                            <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-white/50">
+                                                {Math.round(selectedClip.duration || 0)}s
+                                            </span>
                                         </div>
+                                    </div>
+                                    <button onClick={() => setSelectedClip(null)} className="text-white/50 hover:text-white">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                <div className="mb-6">
+                                    <audio controls className="w-full h-10" autoPlay>
+                                        <source src={`/api/clips/${selectedClip.file_name}`} type="audio/mpeg" />
+                                        Your browser does not support the audio element.
+                                    </audio>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                                        <h4 className="text-sm font-bold text-white/50 mb-2 uppercase tracking-wider">Zusammenfassung</h4>
+                                        <p className="text-white/90">{selectedClip.one_sentence_summary}</p>
+                                    </div>
+
+                                    {selectedClip.mark_nörgel && (
+                                        <div className="p-4 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
+                                            <h4 className="text-sm font-bold text-cyan-400/50 mb-2 uppercase tracking-wider">KI-Mark sagt</h4>
+                                            <p className="text-cyan-300 italic text-lg">"{selectedClip.mark_nörgel}"</p>
+                                        </div>
+                                    )}
+
+                                    <div className="p-4 bg-black/20 rounded-xl border border-white/5">
+                                        <h4 className="text-sm font-bold text-white/50 mb-2 uppercase tracking-wider">Transkript</h4>
+                                        <p className="text-white font-mono text-sm leading-relaxed whitespace-pre-wrap">{selectedClip.text}</p>
                                     </div>
                                 </div>
                             </div>
-                        )
-                    }
-                </div>
+                        </div>
+                    )
+                }
+            </div>
 
-                {/* Toast Notifications */}
-                {toasts.map(toast => (
-                    <Toast
-                        key={toast.id}
-                        message={toast.message}
-                        type={toast.type}
-                        onClose={() => removeToast(toast.id)}
-                    />
-                ))}
-            </>
-            );
+            {/* Toast Notifications */}
+            {toasts.map(toast => (
+                <Toast
+                    key={toast.id}
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => removeToast(toast.id)}
+                />
+            ))}
+        </>
+    );
 }
